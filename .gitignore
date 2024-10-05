@@ -38,5 +38,8 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# Adicionado por mim
+# Adicionado por mim	
 privado/
+wikidata_27ZIHl.csv
+dataset-303642.csv
+dataset-303642-part.csv

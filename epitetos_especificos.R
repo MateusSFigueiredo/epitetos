@@ -6,9 +6,9 @@
 # Pega inicial do gênero
 # Gera tabela de frequência do epíteto específico
 #
-# Modificado em: 2024_10_03
+# Modificado em: 2024_10_05
 # Autor: Mateus Silva Figueiredo
-# dif: tentando deixar mais conciso
+# dif: titulo do grafico baseado na query
 
 # ==============================================================================
 # Load necessary libraries
@@ -24,17 +24,20 @@ list.files()
 # ==============================================================================
 # nome do arquivo csv
 # query<-"query_5_10_5.csv"
-query<-"wikidata_27ZIHl.csv" # 3196241 linhas
+# query<-"wikidata_27ZIHl.csv" # 3196241 linhas
+query<-"especies_col_2181430.csv" # 2181430 linhas, inclui dubias
 
 # Read the CSV file
-df <- read.csv(query, stringsAsFactors = FALSE)
+df <- read.csv(query, 
+#               nrows=1000, # para poucas linhas
+               stringsAsFactors = FALSE)
 print(paste("número de linhas original =", (nrow(df))))
 
 # renomeia coluna taxon_name para nome_do_taxon
 colnames(df)[colnames(df) == "taxon_name"] <- "nome_do_taxon"
 
 # Reduzir número de linhas para testes
-if(F){df <- head(df,10000)}
+if(F){df <- head(df,100000)}
 
 # ==============================================================================
 # Step 1: Tirar linhas com virus
@@ -50,6 +53,8 @@ print(paste("número de linhas sem virus =", (nrow(df))))
 # ------------------------------------------------------------------------------
 
 # Step 2: Remove rows where the 'nome_do_taxon' column has more than two words
+# Necessário para query wikidata
+# Não necessário para especies_col
 
 # nao_binomial = apenas linhas em que 'nome_do_taxon' não tenha duas palavras
 nao_binomial <- df %>% filter(str_count(nome_do_taxon, "\\S+") != 2)
@@ -69,18 +74,43 @@ df <- df %>%
 df <- df %>%
   mutate(last_word = as.character(last_word))
 
+# ------------------------------------------------------------------------------
+# Lidar com iniciais fora do padrão
+# Wikidata tem algumas espécies com x
+# CoL tem espécies com ? † e =
+# Wikidata tem espécies com inicial minúscula
+
+# remover † cruz
+df$nome_do_taxon<-gsub("†","",df$nome_do_taxon)
+
+# remover ? interrogacao
+df$nome_do_taxon<-gsub("\\?","",df$nome_do_taxon)
+# \\ necessário pra R interpretar ? como ? literal
+
+# remover × xis
+df$nome_do_taxon<-gsub("×","",df$nome_do_taxon)
+
+# trim white spaces
+df$nome_do_taxon<-trimws(df$nome_do_taxon)
+
 # Step 4: Create a new column with the first letter of 'nome_do_taxon'
 df <- df %>%
   mutate(first_letter = substr(nome_do_taxon, 1, 1))
 
+# check
+table(df$first_letter)
+
 # ------------------------------------------------------------------------------
 # Eliminar linhas com first_letter fora do alfabeto latino
+# Wikidata tem algumas espécies com x
+# CoL tem espécies com ? † e =
 # Transformar minúsculas em maiúsculas
 
 if(F){ # para inspecionar problema
 table(df$first_letter) # ver tabela
 non_capital_rows <- df %>% filter(!grepl("^[A-Z]", first_letter)) 
-non_capital_rows}
+non_capital_rows
+}
 
 # Filtrar linhas que não começam com letras do alfabeto e salvar
 non_alphabetic_rows <- df %>%  filter(!grepl("^[A-Za-z]$", first_letter))
@@ -104,7 +134,7 @@ freq_df <- as.data.frame(freq_table) %>%
 # freq_df %>% head(20)
 # View(freq_df)
 
-n_epitetos <- 50 # top quantos epitetos especificos analisar?
+n_epitetos <- 20 # top quantos epitetos especificos analisar?
 top_last_words <- as.character(head(freq_df,n_epitetos)$Var)
 
 # ------------------------------------------------------------------------------
@@ -151,17 +181,25 @@ freq_long$first_letter <- paste0(freq_long$first_letter,".")
 # Step 10: Convert 'last_word' to a factor with levels ordered by total frequency
 freq_long$last_word <- factor(freq_long$last_word, levels = last_word_order)
 
+# Define titulo com base em query
+if (grepl("wikidata",query)){fonte <- "- Wikidata"}
+if (grepl("col",query)){fonte <- "- Cat. of Life"}
+
+titulo <- paste("Frequência do epíteto por inicial", fonte)
+
 # Step 11: Plot the frequency matrix using ggplot with custom ordering on x-axis
 ggplot(freq_long, aes(x = last_word, y = first_letter, fill = frequency)) +
   geom_tile(color = "white") +
   scale_fill_gradient(low = "white", high = "blue") +
-  labs(title = "Frequência da inicial por epíteto",
+  labs(title = titulo,
        x = "Epíteto específico",
        y = "Inicial do gênero",
        fill = "Frequência") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
+
+print("Gráfico pronto, fim do código")
 # ==============================================================================
 # Investigar nomes arbitrários
 c_elegans <- df[df$first_letter == "C" & df$last_word == "elegans", ]

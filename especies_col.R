@@ -1,14 +1,16 @@
 # Arquivo: especies_col.R
 
 # Obter lista de espécies do Catalogue of Life
-# Cria colunas "rank" "id" "syn" "author" "year" "taxon_name"
-# Complexo desnecessáriamente
 
 # Usa arquivo dataset-303642.txtree
 # Obtido em https://www.catalogueoflife.org/data/download opção TextTree
 
-# Modificado em: 2024_10_03
+# Modificado em: 2024_10_05
 # Autor: Mateus Silva Figueiredo
+# dif: mais conciso
+# remove espécies dubias com ?, opcional
+# remove subgenero entre parentesis
+# exporta arquivo csv
 
 # ==============================================================================
 # Setup
@@ -17,60 +19,83 @@ getwd()
 list.files()
 
 library(stringr)
+library(dplyr)
 
 # ==============================================================================
 
 # Read the file
-lines <- readLines("dataset-303642-part.txtree")
+lines <- readLines("dataset-303642.txtree")
 
 # Convert the lines into a data frame
 df <- data.frame(name = lines, stringsAsFactors = FALSE)
 
-# ==============================================================================
-# Separate into three columns: name, rank and id
+# Backup
+df_bckp <- df
+# recuperar backup
+df <- df_bckp
 
-# Extract whatever is between [] and place it into a new column
-df$rank <- str_extract(df$name, "\\[([^\\]]+)\\]")
-
-# Extract whatever is between {} and place it into another column
-df$id <- str_extract(df$name, "\\{([^\\}]+)\\}")
-
-# Clean the original Line column by removing the content inside brackets and braces
-df$name <- gsub("\\{([^\\}]+)\\}", "", df$name)
-df$name <- gsub("\\[([^\\}]+)\\]", "", df$name)
-
-# ------------------------------------------------------------------------------
-
-# Create column syn for taxons that are synonyms of other taxons
-# has "=" == is synonim == TRUE
-df$syn<-grepl("=",df$name,fixed=TRUE)
-
-# View the first few rows of the data frame
-head(df)
-
-# Trim white spaces
-df$name <- trimws(df$name)
+# df <- head(df,2000) # menos linhas para testes
 
 # ==============================================================================
+# Only rows with '[species]' from the original df
+df <- df %>% filter(str_detect(name, regex("\\[species\\]", ignore_case = TRUE)))
+# Só quero linhas de espécie # 4173078 obs.
 
-# Subsetting the data frame where 'rank' equals "[species]" and 'syn' equals FALSE
-species <- df[df$rank == "[species]" & df$syn == FALSE, ]
+# remover × xis
+df$name<-gsub(" ×","",df$name)
 
-head(species)
 # ------------------------------------------------------------------------------
-# create column author
-# name's words 3 forward become author
-species$author <- word(species$name, start=3, end=-1)
-species$author <- gsub("[()]","",species$author) # remove ( and )
+# trim white spaces
+df$name<-trimws(df$name)
 
-# last word becomes column year
-species$year <- word(species$name, -1)
-# remove )
-species$year <- gsub(")","",species$year)
+trimws(df$name[3317123])
 
-head(species)
+# ------------------------------------------------------------------------------
+# se segunda palavra for subgenero com ()
+# entao manter palavras 1 e 3
+# do contrario, manter palavras 1 e 2
 
-# keep only two first word of species
-species$taxon_name <- word(species$name, start = 1, end = 2)
+# Opção 1: base R
+df$taxon_name<-ifelse(grepl("\\(", word(df$name, 2, 2)), # if second word has (
+                paste(word(df$name, 1, 1), word(df$name, 3, 3)), # then name is words 1 and 3
+                paste(word(df$name,1,2))) # else name is words 1 and 2
 
-species$name<-NULL
+# Opção 2: mutate
+# # Update the 'name' column based on the condition for the second word
+# df <- df %>%
+#   mutate(name = ifelse(grepl("\\(", word(name, 2, 2)), 
+#                        paste(word(name, 1, 1), word(name, 3, 3)), 
+#                        paste(word(name,1,2))))
+# # works but is slow
+
+# -------------------------------
+# check
+df[492,]
+df[1522515,] # has subgenera and author with ()
+df[3317123,] # has × and =
+# -------------------------------
+
+# remover coluna name
+df$name<-NULL
+
+# Keep only rows where the first character of 'name' is NOT '='
+df <- df %>% filter(substr(taxon_name, 1, 1) != "=")
+# Remove linhas de sinônimos. Resulta 2181430 linhas
+
+# ==============================================================================
+# Export file
+
+file_name <- paste0("especies_col_",nrow(df),".csv")
+
+write.csv(df,file_name,row.names = F)
+
+# ---
+# Para exportar sem espécies dúbias
+# # Keep only rows where the first character of 'name' is NOT '?'
+if(F){df <- df %>% filter(substr(taxon_name, 1, 1) != "?")}
+# Remove espécies dubias. Resulta 2101173 linhas.
+
+# ==============================================================================
+# Analisar casos individuais
+
+df["Orchigymnadenia" %in% df$name]
