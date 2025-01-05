@@ -6,9 +6,9 @@
 # Pega inicial do gênero
 # Gera tabela de frequência do epíteto específico
 #
-# Modificado em: 2024_10_05
+# Modificado em: 2025-01-05
 # Autor: Mateus Silva Figueiredo
-# dif: titulo do grafico baseado na query
+# dif: salva freq_df_1000
 
 # ==============================================================================
 # Load necessary libraries
@@ -16,25 +16,24 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 
-getwd()
+setwd("C:/Users/Mateus/Desktop/R/epitetos")
+
 list.files()
 
 # arquivo csv pode ser obtido por script query_especies_wikidata ou outra fonte
 
 # ==============================================================================
 # nome do arquivo csv
-# query<-"query_5_10_5.csv"
-# query<-"wikidata_27ZIHl.csv" # 3196241 linhas
-query<-"especies_col_2181430.csv" # 2181430 linhas, inclui dubias
+
+query<-"wikidata_species.csv" # 3201049 linhas em 2025-01-03 criado com especies_wd.R
+# query<-"especies_col_2181430.csv" # 2181430 linhas, inclui dubias
 
 # Read the CSV file
 df <- read.csv(query, 
 #               nrows=1000, # para poucas linhas
                stringsAsFactors = FALSE)
-print(paste("número de linhas original =", (nrow(df))))
-
-# renomeia coluna taxon_name para nome_do_taxon
-colnames(df)[colnames(df) == "taxon_name"] <- "nome_do_taxon"
+print(paste(query, "número de linhas original =", (nrow(df))))
+print("colunas:");print(colnames(df))
 
 # Reduzir número de linhas para testes
 if(F){df <- head(df,100000)}
@@ -42,35 +41,35 @@ if(F){df <- head(df,100000)}
 # ==============================================================================
 # Step 1: Tirar linhas com virus
 
-# Filter rows where 'virus' is present in 'nome_do_taxon' and save it to 'virus'
-virus <- df %>% filter(str_detect(nome_do_taxon, regex("virus", ignore_case = TRUE)))
+# Filter rows where 'virus' is present in 'taxon_name' and save it to 'virus'
+virus <- df %>% filter(str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
 
 # Remove rows with 'virus' from the original df
-df <- df %>% filter(!str_detect(nome_do_taxon, regex("virus", ignore_case = TRUE)))
+df <- df %>% filter(!str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
 
-print(paste("número de linhas sem virus =", (nrow(df))))
+print(paste(query, "número de linhas sem virus =", (nrow(df))))
 
 # ------------------------------------------------------------------------------
 
-# Step 2: Remove rows where the 'nome_do_taxon' column has more than two words
+# Step 2: Remove rows where the 'taxon_name' column has more than two words
 # Necessário para query wikidata
 # Não necessário para especies_col
 
-# nao_binomial = apenas linhas em que 'nome_do_taxon' não tenha duas palavras
-nao_binomial <- df %>% filter(str_count(nome_do_taxon, "\\S+") != 2)
+# nao_binomial = apenas linhas em que 'taxon_name' não tenha duas palavras
+nao_binomial <- df %>% filter(str_count(taxon_name, "\\S+") != 2)
 
-# manter apenas linhas em que nome_do_taxon tenha duas palavras
-df           <- df %>% filter(str_count(nome_do_taxon, "\\S+") == 2)
+# manter apenas linhas em que taxon_name tenha duas palavras
+df           <- df %>% filter(str_count(taxon_name, "\\S+") == 2)
 
-print(paste("número de linhas com binomial correto =", (nrow(df))))
+print(paste(query, "número de linhas com binomial correto =", (nrow(df))))
 
 # ------------------------------------------------------------------------------
-
-# Step 3: Create a new column with the last word of the 'nome_do_taxon' column
+# Time: less than one minute
+# Step 3: Create a new column with the last word of the 'taxon_name' column
 df <- df %>%
-  mutate(last_word = sapply(strsplit(nome_do_taxon, " "), tail, 1))
+  mutate(last_word = sapply(strsplit(taxon_name, " "), tail, 1))
 
-# Transformar nome_do_taxon em character
+# Transformar taxon_name em character # parece lento, ~1 minuto
 df <- df %>%
   mutate(last_word = as.character(last_word))
 
@@ -81,21 +80,21 @@ df <- df %>%
 # Wikidata tem espécies com inicial minúscula
 
 # remover † cruz
-df$nome_do_taxon<-gsub("†","",df$nome_do_taxon)
+df$taxon_name<-gsub("†","",df$taxon_name)
 
 # remover ? interrogacao
-df$nome_do_taxon<-gsub("\\?","",df$nome_do_taxon)
+df$taxon_name<-gsub("\\?","",df$taxon_name)
 # \\ necessário pra R interpretar ? como ? literal
 
 # remover × xis
-df$nome_do_taxon<-gsub("×","",df$nome_do_taxon)
+df$taxon_name<-gsub("×","",df$taxon_name)
 
 # trim white spaces
-df$nome_do_taxon<-trimws(df$nome_do_taxon)
+df$taxon_name<-trimws(df$taxon_name)
 
-# Step 4: Create a new column with the first letter of 'nome_do_taxon'
+# Step 4: Create a new column with the first letter of 'taxon_name'
 df <- df %>%
-  mutate(first_letter = substr(nome_do_taxon, 1, 1))
+  mutate(first_letter = substr(taxon_name, 1, 1))
 
 # check
 table(df$first_letter)
@@ -136,7 +135,7 @@ freq_df <- as.data.frame(freq_table) %>%
 
 n_epitetos <- 20 # top quantos epitetos especificos analisar?
 top_last_words <- as.character(head(freq_df,n_epitetos)$Var)
-
+#top_last_words
 # ------------------------------------------------------------------------------
 
 # Step 6: Filter the dataframe to only include the top 20 'last_word's
@@ -185,22 +184,127 @@ freq_long$last_word <- factor(freq_long$last_word, levels = last_word_order)
 if (grepl("wikidata",query)){fonte <- "- Wikidata"}
 if (grepl("col",query)){fonte <- "- Cat. of Life"}
 
-titulo <- paste("Frequência do epíteto por inicial", fonte)
+# titulo <- paste("Frequência do epíteto por inicial", fonte)
+titulo <- paste("Epithet frequency by genus initial", fonte)
 
 # Step 11: Plot the frequency matrix using ggplot with custom ordering on x-axis
-ggplot(freq_long, aes(x = last_word, y = first_letter, fill = frequency)) +
+grafico<-ggplot(freq_long, aes(x = last_word, y = first_letter, fill = frequency)) +
   geom_tile(color = "white") +
   scale_fill_gradient(low = "white", high = "blue") +
   labs(title = titulo,
-       x = "Epíteto específico",
-       y = "Inicial do gênero",
-       fill = "Frequência") +
+       x = "Specific epithet",
+       y = "Genus initial",
+       fill = "Frequency") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1));grafico
   
 
-print("Gráfico pronto, fim do código")
+print("Gráfico pronto")
 # ==============================================================================
+?ggsave
+
+query
+fonte
+
+# Define titulo com base em query
+if (grepl("wikidata",query)){fonte <- "wikidata_"}
+if (grepl("col",query)){fonte <- "col_"}
+
+tempo_atual <- format(Sys.time(), "%Y-%m-%d-%H-%M")
+
+Sys.time()
+
+filename<-paste0("frequency_matrix_",fonte,tempo_atual,".png")
+filename
+ggsave(filename=filename, plot=last_plot(), scale=1, width=2000, height = 1200, units="px")
+
+print("Imagem salva")
+# ==============================================================================
+
+# Inspect frequency table and matrix
+
+freq_matrix[,2:21] %>% max()
+freq_table$freq %>% sort()
+
+# In the Wikidata dataset, the most common abbreviation is C. elegans, with 730 species, followed by P. gracilis, with 664 species, next 570 examples of C. gracilis.
+
+freq_epiteto <- table(df$last_word)
+freq_epiteto <- as.data.frame(freq_epiteto)
+
+# ==============================================================================
+# Inspect Wikidata dataframe
+
+# Numero total de linhas
+nrow(df)
+
+# Numero de linhas em cada categoria
+sum(df$instance_of_label == "taxon")         # 3110747
+sum(df$instance_of_label == "fossil taxon")  # 69672
+sum(df$instance_of_label == "extinct taxon") # 607
+
+# Itens no wikidata sem indicação de CoL ID
+sum(df$col_id == "")                         # 1163819 no wikidata sem col
+df[df$col_id=="",]
+
+# Wikidata tem muitos c elegans
+c_elegans <- df[df$last_word == "elegans" & df$first_letter == "C", ]
+sort(c_elegans$taxon_name)
+
+# ==============================================================================
+# Produzir gráfico só dos epitetos
+
+# Ordenar freq_epiteto por frequencia descendente
+freq_epiteto <- freq_epiteto[order(-freq_epiteto$Freq), ]
+
+# Ensure Var1 is treated as a factor with levels in the original order
+freq_epiteto$Var1 <- factor(freq_epiteto$Var1, levels = unique(freq_epiteto$Var1))
+
+dados<-freq_epiteto
+dados <- head(freq_epiteto,2000) # para testes menores
+
+# Coluna rank
+dados$rank<-c(1:nrow(dados))
+
+# Create a line plot using ggplot2
+ggplot(dados, aes(x = log(rank), y = log(Freq),group=1)) +
+  geom_line(stat = "identity") +
+  geom_abline(intercept = log(max(dados$Freq)), slope = -1, color = "red", linetype = "dashed") +  # Reference line with slope -1
+  xlab("long(Rank)") +
+  ylab("log(Frequency)") +
+  ylim(c(0,8))+
+  xlim(c(1,14))+
+  ggtitle("Line Plot of Epithets vs log of Frequency") +
+  theme_minimal()
+
+# plot(freq_epiteto$Freq ~ freq_epiteto$Var1)
+
+library(ggplot2)
+library(dplyr)
+#install.packages('themes')
+install.packages('gganimate')
+#library(themes)
+library(gganimate)
+
+zipfs_plot <- ggplot(dados, aes(x = rank, y = 1/Freq)) + 
+  geom_point(aes(color = "observed")) +
+  theme_bw() + 
+  geom_point(aes(y = Freq, color = "theoretical")) +
+  labs(x = "rank", y = "count", title = "Zipf's law visualization") +
+  scale_colour_manual(name = "Word count", values=c("theoretical" = "red", "observed" = "black")) +
+  theme(legend.position = "top")
+
+zipfs_plot
+
+# ==============================================================================
+# Epitetos mais frequentes
+head(freq_df)
+freq_df_1000 <- head(freq_df,1000)
+
+# Deseja salvar arquivo csv?
+if(F){write.csv(freq_df_1000,"freq_df_1000.csv")}
+
+# ==============================================================================
+print("Fim do código")
 # Investigar nomes arbitrários
 c_elegans <- df[df$first_letter == "C" & df$last_word == "elegans", ]
 p_gracilis <- df[df$first_letter == "P" & df$last_word == "gracilis", ]
@@ -209,4 +313,7 @@ df[df$first_letter == "P" & df$last_word == "gouldii", ]
 
 df[df$first_letter == "C", ]
 df[df$last_word == "figueiredoi", ]
+
+max(freq_matrix)
+
 
