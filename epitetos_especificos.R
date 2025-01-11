@@ -6,9 +6,9 @@
 # Pega inicial do gênero
 # Gera tabela de frequência do epíteto específico
 #
-# Modificado em: 2025-01-05
+# Modificado em: 2025-01-06
 # Autor: Mateus Silva Figueiredo
-# dif: salva freq_df_1000
+# dif: remove taxon_name com numeros
 
 # ==============================================================================
 # Load necessary libraries
@@ -64,6 +64,17 @@ df           <- df %>% filter(str_count(taxon_name, "\\S+") == 2)
 print(paste(query, "número de linhas com binomial correto =", (nrow(df))))
 
 # ------------------------------------------------------------------------------
+# Step 2.5: Remove rows where the taxon_name has numbers
+
+# Filter rows where a number is present in 'taxon_name' and save it to number
+number <- df[grepl("\\d", df$taxon_name), ]
+
+# Remove rows with a number from the original df
+df <- df[!grepl("\\d", df$taxon_name), ]
+
+print(paste(query, "número de linhas sem numero =", (nrow(df))))
+
+# ------------------------------------------------------------------------------
 # Time: less than one minute
 # Step 3: Create a new column with the last word of the 'taxon_name' column
 df <- df %>%
@@ -92,12 +103,15 @@ df$taxon_name<-gsub("×","",df$taxon_name)
 # trim white spaces
 df$taxon_name<-trimws(df$taxon_name)
 
+# Optional. Sort the dataframe alphabetically by 'last_word'
+# df <- df[order(df$last_word), ]
+
 # Step 4: Create a new column with the first letter of 'taxon_name'
 df <- df %>%
   mutate(first_letter = substr(taxon_name, 1, 1))
 
 # check
-table(df$first_letter)
+# table(df$first_letter)
 
 # ------------------------------------------------------------------------------
 # Eliminar linhas com first_letter fora do alfabeto latino
@@ -106,9 +120,9 @@ table(df$first_letter)
 # Transformar minúsculas em maiúsculas
 
 if(F){ # para inspecionar problema
-table(df$first_letter) # ver tabela
+print(table(df$first_letter)) # ver tabela
 non_capital_rows <- df %>% filter(!grepl("^[A-Z]", first_letter)) 
-non_capital_rows
+print(non_capital_rows)
 }
 
 # Filtrar linhas que não começam com letras do alfabeto e salvar
@@ -119,6 +133,9 @@ df <- df %>%  filter(grepl("^[A-Za-z]$", first_letter))
 
 # Passar letra inicial minúscula para maiúscula
 df$first_letter <- toupper(df$first_letter)
+
+# check
+table(df$first_letter)
 
 # ------------------------------------------------------------------------------
 
@@ -300,8 +317,68 @@ zipfs_plot
 head(freq_df)
 freq_df_1000 <- head(freq_df,1000)
 
+# Apenas linhas referentes a local
+epitetos_local <- freq_df[grepl("(ensis|ana|alis|anus|anum|icus|ica|icum)$", freq_df$Var1),]
+
+
 # Deseja salvar arquivo csv?
 if(F){write.csv(freq_df_1000,"freq_df_1000.csv")}
+# --------------------
+# Soma por categorias
+
+# --------------------
+# Continentes
+epitetos <- c("africana", "africanum", "africanus")
+epitetos <- c("americana","americanum","americanus")
+epitetos <- c("asiatica", "asiaticum","asiaticus")
+epitetos <- c("europaea","europaeus","europaeum","europae","europa","europeus")
+epitetos <- c("antarctica","antarcticus","antarcticum")
+
+epitetos <- c("australiensis","australiense","australiana") # ou sul?
+epitetos <- c("oceanica","oceanicus","oceanum","oceaniensis","oceania")
+
+prefixo <- "eurasia";epitetos <- paste0(prefixo,
+                                            c("ana","anus","anum",
+                                              "na","nus","num",
+                                              "ensis","ense",
+                                              "aea","aeus","aeum","ae","eus",
+                                              "tica","ticus","ticum",
+                                              "ca","cus","cum",
+                                              "ica","icus","icum",
+                                              "a","us","um",""))
+
+soma <- sum(freq_df[freq_df$Var1 %in% epitetos, 2]);paste(paste(epitetos, collapse = " "),"=",soma,"species")
+
+# -----------------
+# Direções
+epitetos <- c("borealis","boreale","hyperborea", "boreas","borea","septentrionalis","septentrionale")
+epitetos <- c("australis","australe") # ou australia?
+epitetos <- c("orientalis","orientale","orientis","oriens")
+epitetos <- c("occidentalis","occidentale","occidens","occidentis")
+
+# --------------------
+# Países
+epitetos <- paste0("brasili",c("ana","anus","ensis","ense"))
+epitetos <- paste0("mexican",c("a","us","um"))
+epitetos <- paste0("japonic",c("a","us","um"))
+epitetos <- c("sinensis","sinense","chinensis","chinense")
+epitetos <- paste0("indic",c("a","us","um"))
+
+
+
+prefixo <- "brazili";epitetos <- paste0(prefixo,
+                              c("ana","anus","anum",
+                                "na","nus","num",
+                               "ensis","ense",
+                               "ca","cus","cum",
+                               "ica","icus","icum",
+                               "a","us","um"))
+
+# --------------------
+
+soma <- sum(freq_df[freq_df$Var1 %in% epitetos, 2]);paste(paste(epitetos, collapse = " "),"=",soma,"species")
+
+sum(freq_df[freq_df$Var1 %in% epitetos, 2])
 
 # ==============================================================================
 print("Fim do código")
@@ -317,3 +394,4 @@ df[df$last_word == "figueiredoi", ]
 max(freq_matrix)
 
 
+df[df$last_word=="sp.",]
