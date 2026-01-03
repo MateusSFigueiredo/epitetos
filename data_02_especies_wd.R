@@ -2,11 +2,12 @@
 
 # Trabalhar com lista de espécies do wikidata
 
-# Usa arquivo wikidata_IX04x2.csv 
-# Obtido em https://qlever.dev/wikidata/IX04x2#csv   
-# Download em 31 dezembro 2025 = 3,268,594 lines found 
+# Input: arquivo wikidata_IX04x2.csv 
 
-# Modificado em: 2025-01-31
+# Output: arquivo com colunas ("id", "generic_name",
+# "generic_initial", "specific_epithet")
+
+# Modificado em: 2026-01-02
 # Autor: Mateus Silva Figueiredo
 
 # ==============================================================================
@@ -16,20 +17,200 @@ list.files()
 
 library(dplyr)
 
-# Read the file
-
-origem <- read.csv2("wikidata_udSVmA.csv",sep=",") # lines
-
-df <- origem # manter origem imutavel
+# Arquivo obtido em https://qlever.dev/wikidata/udSVmA#csv   
+# Download em 31 dezembro 2025 = 3,268,594 lines found 
 
 # ==============================================================================
+# Carregar dados a partir de wikidata_udSVmA.csv
 
-colnames(df)
+dados <- read.csv2("wikidata_udSVmA.csv",sep=",") # lines
+df <- dados # manter dados imutável, manipular apenas df
+
+# Conferir dados
+if(T){ # T para executar, F para ignorar
+  
+  head(dados) # primeiras linhas
+  print(dados[1234,]) # linha arbitrária
+  
+  colnames(dados)
+  
+}
+
+# =======================
+# primeiro, remover todos que não são taxon ou fossil taxon
+# criando assim df_taxon
+
+# View(table(df$instance_of_label)) # conferir antes
+
+antes <- nrow(df)
+
+df_taxon <- subset(df,df$instance_of_label %in% c("taxon","fossil taxon"))
+
+depois <- nrow(df_taxon)
+
+# View(table(df_taxon$instance_of_label)) # conferir depois
+
+# Print texto de análise
+paste("Antes de manter apenas taxon e fossil taxon, df tinha",
+      antes,"linhas. Depois, tem",depois,"linhas.",
+      "Foram removidas",antes-depois,"linhas fora do escopo de taxon."); rm(antes,depois)
+
+# =======================
+# fazer df_unique apenas com itens únicos, removendo duplicados
+# aplicando unique para o df todo
+
+antes <- nrow(df_taxon)
+
+df_unique <- df_taxon %>% distinct(item, .keep_all=TRUE)
+
+depois <- nrow(df_unique)
+
+paste("Antes de remover dados duplicados, df tinha",
+      antes,"linhas.",
+      "Depois da remoção, df com itens únicos tem",depois,"linhas.",
+      "Foram eliminados",antes-depois,"itens duplicados.")
+
+# =======================
+# remover linhas em que todas as colunas de id estejam em branco
+
+# Define the ID columns
+id_cols <- colnames(df)[c(5:66)]
+
+# Create df removing ID lines vazias
+df_with_ids <- df[!apply(df[id_cols], 1, function(x) {
+  all(is.na(x) | grepl("^\\s*$", x))
+}), ]
+
+paste("Foram mantidos",nrow(df_with_ids),"linhas com ao menos um id preenchido.",
+      "Foram removidas",nrow(df_unique)-nrow(df_with_ids),"linhas sem id.")
+
+
+# ===============================
+# Define colunas de interesse
+colunas <- c("item","taxon_name")
+# subset apenas colunas de interesse, cria novo df atualizado
+df <- df_with_ids[,colunas]
+
+# =============================
+# Importado de epitetos_especificos.R
+
+# ==============================================================================
+# Step 1: Tirar linhas com virus
+
+# Filter rows where 'virus' is present in 'taxon_name' and save it to 'virus'
+virus <- df %>% filter(str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
+
+# Remove rows with 'virus' from the original df
+df <- df %>% filter(!str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
+
+print(paste("número de linhas sem virus =", (nrow(df))))
+
+# ------------------------------------------------------------------------------
+
+# Step 2: Remove rows where the 'taxon_name' column has more than two words
+
+# nao_binomial = apenas linhas em que 'taxon_name' não tenha duas palavras
+nao_binomial <- df %>% filter(str_count(taxon_name, "\\S+") != 2)
+
+# manter apenas linhas em que taxon_name tenha duas palavras
+df           <- df %>% filter(str_count(taxon_name, "\\S+") == 2)
+
+print(paste("número de linhas com binomial correto =", (nrow(df))))
+
+# ------------------------------------------------------------------------------
+# Step 2.5: Remove rows where the taxon_name has numbers
+
+# Filter rows where a number is present in 'taxon_name' and save it to number
+number <- df[grepl("\\d", df$taxon_name), ]
+
+# Remove rows with a number from the original df
+df <- df[!grepl("\\d", df$taxon_name), ]
+
+print(paste("número de linhas sem numero =", (nrow(df))))
+
+# ------------------------------------------------------------------------------
+# Time: less than one minute
+# Step 3: Create a new column with the last word of the 'taxon_name' column
+df <- df %>%
+  mutate(specific_epithet = sapply(strsplit(taxon_name, " "), tail, 1))
+
+# Transformar taxon_name em character # parece lento, ~1 minuto
+df <- df %>%
+  mutate(specific_epithet = as.character(specific_epithet))
+
+# ------------------------------------------------------------------------------
+# Lidar com iniciais fora do padrão
+# Wikidata tem algumas espécies com x
+# Wikidata tem espécies com inicial minúscula
+
+# remover × xis
+df$taxon_name<-gsub("×","",df$taxon_name)
+
+# trim white spaces
+df$taxon_name<-trimws(df$taxon_name)
+
+# Optional. Sort the dataframe alphabetically by 'specific_epithet'
+# df <- df[order(df$specific_epithet), ]
+
+# Step 4: Create a new column with the first letter of 'taxon_name'
+df <- df %>%
+  mutate(generic_initial = substr(taxon_name, 1, 1))
+
+# check
+# table(df$generic_initial)
+
+# ------------------------------------------------------------------------------
+# Eliminar linhas com generic_initial fora do alfabeto latino
+# Wikidata tem algumas espécies com x
+# CoL tem espécies com ? † e =
+# Transformar minúsculas em maiúsculas
+
+if(F){ # para inspecionar problema
+  print(table(df$generic_initial)) # ver tabela
+  non_capital_rows <- df %>% filter(!grepl("^[A-Z]", generic_initial)) 
+  print(non_capital_rows)
+}
+
+# Filtrar linhas que não começam com letras do alfabeto e salvar
+non_alphabetic_rows <- df %>%  filter(!grepl("^[A-Za-z]$", generic_initial))
+
+# Atualizar df e manter apenas linhas que começam com letras do alfabeto
+df <- df %>%  filter(grepl("^[A-Za-z]$", generic_initial))
+
+# Passar letra inicial minúscula para maiúscula
+df$generic_initial <- toupper(df$generic_initial)
+
+# check
+table(df$generic_initial)
+
+# ===========================================================================
+# Define colunas de interesse
+colunas <- c("item","taxon_name","generic_initial","specific_epithet")
+# subset apenas colunas de interesse
+df <- df[,colunas]
+
+# nrow(df)
+
+# =======================================
+# Export df
+
+# Save file with date and time to avoid a bad overwrite
+
+# create save_path with date and time
+save_path <- paste0("df_wikidata_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".csv")
+# save csv with date and time in its name
+write.csv(df,file=save_path,row.names=F)
+
+# ======================================
+print("Fim do código")
+
+rm(nao_binomial,non_alphabetic_rows,number,virus)
+
+# ===========================================================================
+# Análises variadas arbitrárias
 
 # ver instance of labels mais comuns
 View(table(df$instance_of_label))
-
-head(df)
 
 # =======================
 # quantas linhas tem todas as colunas id vazias?
@@ -50,74 +231,3 @@ empty_rows <- nrow(empty_df)
 paste("Das",nrow(df),"linhas, apenas",empty_rows,"não tem nenhum id dentre", 
       "as vinte bases de dados analisadas. Ou seja,",round(empty_rows*100/nrow(df),2),"%.",
       "Sobram",nrow(df)-empty_rows,"linhas preenchidas.")
-
-# =======================
-# primeiro, remover todos que não são taxon ou fossil taxon
-
-View(table(df$instance_of_label))
-
-antes <- nrow(df)
-
-df <- subset(df,df$instance_of_label %in% c("taxon","fossil taxon"))
-
-depois <- nrow(df)
-
-paste("Antes, df tinha",antes,"linhas. Depois, tem",depois,"linhas.",
-      "Foram removidas",antes-depois,"linhas fora do escopo de taxon.")
-
-# =======================
-# testando unique
-unique(df$item)
-
-df_amostra <- head(df,50)
-
-table(df_amostra$item) # percebe-se que http://www.wikidata.org/entity/Q1001586 é repetido
-
-df_amostra_unique <- df_amostra %>% distinct(item, .keep_all=TRUE)
-
-table(df_amostra_unique$item) # agora são todos únicos
-
-# ------------------------
-# aplicando unique para o df todo
-# fazer novo df apenas com itens únicos
-
-paste("Origem tem",nrow(origem),"linhas")
-
-df <- df %>% distinct(item, .keep_all=TRUE)
-
-paste("Origem tem",nrow(origem),"linhas.",
-      "df com itens únicos tem",nrow(df),"linhas.",
-      "Foram eliminados",nrow(origem)-nrow(df),"itens duplicados.")
-
-
-# =======================
-
-############### código antigo abaixo
-
-# head(sort(table(df$instance_of_label), decreasing = TRUE),20)
-
-# subset apenas com instance of mais pertinentes
-
-cats <- c("taxon","fossil taxon","extinct taxon") # categorias aceitas
-
-df <- df[df$instance_of_label %in% cats,]         # cria subset
-# novo df = 3,203,003 lines
-
-# View(table(df$instance_of_label))
-# apenas 3 categorias, como esperado.
-
-# quais são duplicados?
-# which(duplicated(df$taxon_name))
-# df[227,]
-# df[df$taxon_name=="Horizocerus hartlaubi",]
-
-# remove duplicados
-df <- df[!duplicated(df$taxon_name), ]
-# nrow(df) # 3201049 lines
-# ==============================================================================
-
-# deseja salvar arquivo csv?
-if(T){write.csv(df, "wikidata_species.csv", row.names = FALSE); print("arquivo csv exportado")
-}
-
-print(paste("script especies_wd.R finalizado. nrow(df) ==",nrow(df)))
