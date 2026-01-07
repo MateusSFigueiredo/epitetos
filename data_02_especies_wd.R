@@ -7,8 +7,11 @@
 # Output: arquivo com colunas ("id", "generic_name",
 # "generic_initial", "specific_epithet")
 
-# Modificado em: 2026-01-02
+# Colunas no output: df <- df %>% select(id, taxon_name, generic_initial, specific_epithet)
+
+# Modificado em: 2026-01-06
 # Autor: Mateus Silva Figueiredo
+# dif: padroniza colunas em ordem
 
 # ==============================================================================
 # Setup
@@ -22,14 +25,13 @@ library(dplyr)
 
 # ==============================================================================
 # Carregar dados a partir de wikidata_udSVmA.csv
-
-dados <- read.csv2("wikidata_udSVmA.csv",sep=",") # lines
+dados <- read.csv2("wikidata_udSVmA.csv",sep=",") # lines # 45 secs
 df <- dados # manter dados imutável, manipular apenas df
 
 # Conferir dados
 if(T){ # T para executar, F para ignorar
   
-  head(dados) # primeiras linhas
+  print(head(dados)) # primeiras linhas
   print(dados[1234,]) # linha arbitrária
   
   colnames(dados)
@@ -59,9 +61,15 @@ paste("Antes de manter apenas taxon e fossil taxon, df tinha",
 # fazer df_unique apenas com itens únicos, removendo duplicados
 # aplicando unique para o df todo
 
+# check
+# df_taxon[df_taxon$item=="http://www.wikidata.org/entity/Q122111980",c(1,3,4)]
+
 antes <- nrow(df_taxon)
 
 df_unique <- df_taxon %>% distinct(item, .keep_all=TRUE)
+
+# check
+# df_unique[df_unique$item=="http://www.wikidata.org/entity/Q122111980",c(1,3,4)]
 
 depois <- nrow(df_unique)
 
@@ -70,20 +78,22 @@ paste("Antes de remover dados duplicados, df tinha",
       "Depois da remoção, df com itens únicos tem",depois,"linhas.",
       "Foram eliminados",antes-depois,"itens duplicados.")
 
+# atualiza df
+df <- df_unique
+
 # =======================
 # remover linhas em que todas as colunas de id estejam em branco
 
 # Define the ID columns
 id_cols <- colnames(df)[c(5:66)]
 
-# Create df removing ID lines vazias
+# Create df removing ID lines vazias # lento
 df_with_ids <- df[!apply(df[id_cols], 1, function(x) {
   all(is.na(x) | grepl("^\\s*$", x))
 }), ]
 
 paste("Foram mantidos",nrow(df_with_ids),"linhas com ao menos um id preenchido.",
       "Foram removidas",nrow(df_unique)-nrow(df_with_ids),"linhas sem id.")
-
 
 # ===============================
 # Define colunas de interesse
@@ -92,18 +102,18 @@ colunas <- c("item","taxon_name")
 df <- df_with_ids[,colunas]
 
 # =============================
-# Importado de epitetos_especificos.R
+# Trecho importado de epitetos_especificos.R
 
 # ==============================================================================
 # Step 1: Tirar linhas com virus
 
-# Filter rows where 'virus' is present in 'taxon_name' and save it to 'virus'
-virus <- df %>% filter(str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
+# Filter rows where 'virus|viroid|viriform' is present in 'taxon_name' and save it to 'virus'
+virus_etc <- df %>% filter(str_detect(taxon_name, regex("virus|viroid|viriform", ignore_case = TRUE)))
 
-# Remove rows with 'virus' from the original df
-df <- df %>% filter(!str_detect(taxon_name, regex("virus", ignore_case = TRUE)))
+# Remove rows with 'virus|viroid|viriform' from the original df
+df <- df %>% filter(!str_detect(taxon_name, regex("virus|viroid|viriform", ignore_case = TRUE)))
 
-print(paste("número de linhas sem virus =", (nrow(df))))
+print(paste("número de linhas sem virus|viroid|viriform =", (nrow(df))))
 
 # ------------------------------------------------------------------------------
 
@@ -121,20 +131,23 @@ print(paste("número de linhas com binomial correto =", (nrow(df))))
 # Step 2.5: Remove rows where the taxon_name has numbers
 
 # Filter rows where a number is present in 'taxon_name' and save it to number
-number <- df[grepl("\\d", df$taxon_name), ]
+number <- df[grepl("\\d", df$taxon_name), ] # 55 linhas, apenas preciocismo
 
 # Remove rows with a number from the original df
 df <- df[!grepl("\\d", df$taxon_name), ]
 
 print(paste("número de linhas sem numero =", (nrow(df))))
 
+# cria backup
+df_no_numbers <- df
+
 # ------------------------------------------------------------------------------
-# Time: less than one minute
+# Time: less than one minute. 46 secs
 # Step 3: Create a new column with the last word of the 'taxon_name' column
 df <- df %>%
   mutate(specific_epithet = sapply(strsplit(taxon_name, " "), tail, 1))
 
-# Transformar taxon_name em character # parece lento, ~1 minuto
+# Transformar taxon_name em character # run 1 = 1 min. run 2 = 0.002 secs.
 df <- df %>%
   mutate(specific_epithet = as.character(specific_epithet))
 
@@ -144,7 +157,7 @@ df <- df %>%
 # Wikidata tem espécies com inicial minúscula
 
 # remover × xis
-df$taxon_name<-gsub("×","",df$taxon_name)
+df$taxon_name<-gsub("× ","",df$taxon_name)
 
 # trim white spaces
 df$taxon_name<-trimws(df$taxon_name)
@@ -157,12 +170,17 @@ df <- df %>%
   mutate(generic_initial = substr(taxon_name, 1, 1))
 
 # check
+# subset(df,df$generic_initial %in% c("a","c","l","m","p"))
+
+# Passar letra inicial minúscula para maiúscula
+df$generic_initial <- toupper(df$generic_initial)
+
+# check
 # table(df$generic_initial)
 
 # ------------------------------------------------------------------------------
 # Eliminar linhas com generic_initial fora do alfabeto latino
-# Wikidata tem algumas espécies com x
-# CoL tem espécies com ? † e =
+# Wikidata tem algumas espécies com x + e «
 # Transformar minúsculas em maiúsculas
 
 if(F){ # para inspecionar problema
@@ -184,10 +202,13 @@ df$generic_initial <- toupper(df$generic_initial)
 table(df$generic_initial)
 
 # ===========================================================================
-# Define colunas de interesse
-colunas <- c("item","taxon_name","generic_initial","specific_epithet")
-# subset apenas colunas de interesse
-df <- df[,colunas]
+# Já há apenas colunas de interesse
+
+# rename column
+df<-rename(df, id = item)
+
+# reorder columns
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet)
 
 # nrow(df)
 
@@ -197,7 +218,7 @@ df <- df[,colunas]
 # Save file with date and time to avoid a bad overwrite
 
 # create save_path with date and time
-save_path <- paste0("df_wikidata_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".csv")
+save_path <- paste0("df_wd_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".csv")
 # save csv with date and time in its name
 write.csv(df,file=save_path,row.names=F)
 
@@ -205,7 +226,7 @@ write.csv(df,file=save_path,row.names=F)
 print("Fim do código")
 
 rm(nao_binomial,non_alphabetic_rows,number,virus)
-
+rm(df_no_numbers,df_taxon,df_unique,df_with_ids)
 # ===========================================================================
 # Análises variadas arbitrárias
 

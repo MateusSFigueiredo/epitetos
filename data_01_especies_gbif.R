@@ -7,28 +7,33 @@
 # Output: dataframe df_gbif com lista de todas as espécie válidas
 # com coluna para inicial do gênero, e coluna para epiteto.
 
-# colnames output: ("id", "generic_name",
-# "generic_initial", "specific_epithet","kingdom")
+# Colunas no output:
+# df <- df %>% select(id, taxon_name, generic_initial,
+# specific_epithet, kingdom)
 
-# Modificado em: 2025-01-02
+# Modificado em: 2025-01-06
 # Autor: Mateus Silva Figueiredo
+# dif: remove linhas com epíteto 'spec', certamente um artefato do GBIF
+# dif: remove linhas com NA
+
+# a fazer: conferir se é possível identificar ano de descrição da espécie
 
 # ==============================================================================
 # Setup
 
-getwd()
-list.files()
-
 library(stringr)
 library(dplyr)
 library(readr) # para read_tsv
+
+getwd()
+list.files()
 
 # Download backbone.zip from GBIF Hosted Datasets, which includes Taxon.tsc
 # Current file from 2023-08-28 15:19
 
 # ==============================================================================
 # carregar dados a partir de Taxon.tsc
-dados <- read_tsv("Taxon.tsv") # lines
+dados <- read_tsv("Taxon.tsv") # lines # 1.2 minutes
 
 # Conferir dados
 if(F){ # T para executar, F para ignorar
@@ -50,9 +55,19 @@ df_species <- subset(df_accepted,df_accepted$taxonRank=="species")
 # Subset remove virus
 df <- subset(df_species,df_species$kingdom!="Viruses")
 
+# A fazer: conferir se há virus|viroid|viriform|satellite|phage nas espécies
+
+# Subset remove NA
+df <- df[!is.na(df$specificEpithet), ]
+
+# Remove desnecessários
+rm(df_accepted,df_species)
+
+# Análise de texto
+nrow(df) |> paste("linhas de espécie aceita sem vírus sem NA")
 # ------------------------
 # Define colunas de interesse
-colunas <- c("taxonID","genericName","specificEpithet","kingdom")
+colunas <- c("taxonID","canonicalName","genericName","specificEpithet","kingdom")
 # subset apenas colunas de interesse
 df <- df[,colunas]
 
@@ -68,9 +83,31 @@ df<-rename(df, generic_name = genericName)
 df<-rename(df, generic_initial = genericInitial)
 df<-rename(df, specific_epithet = specificEpithet)
 df<-rename(df, id = taxonID)
+df<-rename(df, taxon_name = canonicalName)
 
 # reorder columns
-df <- df %>% select(id, generic_name, generic_initial, specific_epithet, kingdom)
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
+
+# =======================================
+# remover epitetos spec
+nrow(df) |> paste("espécies em df antes da remoção")
+
+rm(df_spec,df_clean)
+
+df_spec <- subset(df,df$specific_epithet=="spec")
+
+# df_clean <- subset(df,df$specific_epithet!="spec") # subset também remove NA
+
+df_clean <- df[df$specific_epithet != "spec", ]
+
+nrow(df_clean) |> paste("espécies em df_clean após remover spec")
+
+(nrow(df)-nrow(df_clean)) |> paste("espécies spec removidas")
+
+nrow(df) |> paste("linhas de espécies em GBIF no final, após remover spec")
+
+df <- df_clean
+# --------------------------------------
 
 # df gbif está pronto para ser exportado
 # =======================================
@@ -102,7 +139,7 @@ table(dados$taxonRank)
 # Quantos accepted, quantos synonimous?
 table(dados$taxonomicStatus)
 
-# 
+# subset aceitos
 dados_accepted <- subset(dados,dados$taxonomicStatus=="accepted")
 # 3395442 táxons aceitos
 

@@ -1,4 +1,4 @@
-# Arquivo: especies_col.R
+# Arquivo: data_03_especies_col.R
 
 # Obter lista de espécies do Catalogue of Life
 
@@ -6,12 +6,11 @@
 
 # Output: arquivo com colunas ("id","taxon_name",
 # "generic_initial", "specific_epithet", "kingdom")
+# Colunas no output: df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
 
-# Modificado em: 2026-01-03
+# Modificado em: 2026-01-06
 # Autor: Mateus Silva Figueiredo
-# dif: coluna kingdom. trim whitespace e remove virus mais cedo. cria df_virus. 
-# Remove subgenero mais rápido, com código do DeepSeek.]
-# remover "× " em vez de " ×"
+# dif: padroniza colunas em ordem
 
 # ==============================================================================
 # Setup
@@ -44,7 +43,7 @@ if(F){df <- head(dados,25000)} # menos linhas para testes
 rm(lines) # limpeza
 # ==============================================================================
 # trim white spaces # ~8 segundos
-df$name<-trimws(df$name)
+df$name<-trimws(df$name) # corta os espaços em branco no começo das linhas
 
 (df$name[7123]) # confere linha arbitrária
 
@@ -111,6 +110,8 @@ df_alive <- df[-c(virus_start:virus_end),]
 # Remove rows with 'virus|viroid|viriform' from the original df which might not me in the Viruses [unranked] interval
 df_alive <- df_alive %>% filter(!str_detect(name, regex("virus|viroid|viriform", ignore_case = TRUE)))
 
+# -------------
+
 # atualiza df, agora sem virus
 df <- df_alive
 # ==============================================================================
@@ -122,7 +123,7 @@ df <- df %>% filter(str_detect(name, regex("\\[species\\]", ignore_case = TRUE))
 paste("Há",nrow(df),"linhas com [species], incluindo sinônimos, após remover vírus")
 
 # remover × xis que normalmente fica após primeira palavra # ~15 segundos
-df$name<-gsub("× ","",df$name)
+df$name<-gsub("× ","",df$name) # "× " com espaço após o xis para remover do começo tb
 
 # check
 if(T){
@@ -163,12 +164,13 @@ df$taxon_name <- sapply(split_names, function(words) {
   }
 }) # Time of 1.28 mins
 
+# -------------------------------
+
 # check select lines
 if(T){
   df[c(1,63524,64532,83349),c(2,4)]
-}
+} # taxon_name should have only two words
 
-# -------------------------------
 # check again
 if(F){ # F to ignore, T to run
 df[492,] # normal species
@@ -186,7 +188,7 @@ df$name<-NULL
 
 # remover † cruz do início do taxon_name, pois quero manter extintos
 df$taxon_name<-gsub("†","",df$taxon_name)
-# Espécies extintas com inicial † podem ficar
+# Espécies extintas com inicial † podem ficar, mas sem a cruz
 
 n_all <- nrow(df) # numero de todas as especies em dados
 
@@ -196,6 +198,11 @@ df <- df %>% filter(substr(taxon_name, 1, 1) != "=")
 
 n_no_syn <- nrow(df) # numero de especies removendo os sinonimos
 
+# Análise em texto.
+paste("Havia",n_all,"linhas com [species].",
+      "Após remoção dos sinônimos com = sobraram",n_no_syn,
+      "Foram removidos",n_all-n_no_syn,"sinônimos.")
+
 # --------------
 # Para lista sem espécies dúbias
 # # Keep only rows where the first character of 'name' is NOT '?'
@@ -204,11 +211,12 @@ if(T){df <- df %>% filter(substr(taxon_name, 1, 1) != "?")}
 
 n_no_dub <- nrow(df) # numero de especies removendo sinonimos e dubias
 
+# Análise em texto
 paste("Havia",n_all,"linha de espécie.",
       "Após remover sinônimos (=), sobraram",n_no_syn,"espécies.",
       "Após remover dúbias (?), sobraram",n_no_dub,"espécies.")
 
-# nenhuma espécie com ×, nenhuma com =, nenhuma começando com ?
+# sobra nenhuma espécie com ×, nenhuma com =, nenhuma começando com ?
 
 # ==============================================================================
 # Criar coluna generic_initial
@@ -228,6 +236,11 @@ df <- df %>%
   mutate(specific_epithet = as.character(specific_epithet))
 # ==============================================================================
 colnames(df)
+
+# rename column by column # no need
+
+# reorder columns
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
 
 # =======================================
 # Export df
@@ -266,6 +279,10 @@ sum(grepl("satellite", df_alive$name, ignore.case = TRUE)) |> paste("linhas escr
 sum(grepl("virus|viriform|viroid", df_alive$name, ignore.case = TRUE)) |> paste("linhas escrito satellite em df_alive")
 
 
+## check conferir se há virus|viroid|viriform|satellite|phage nas espécies
+df_alive %>% filter(str_detect(name, regex("satellite|phage", ignore_case = TRUE)))
+# há muitos animais satellite e phage
+
 # df com 
 df_virus_oculto <- df_virus %>%  filter(!str_detect(name, regex("virus|viriform|viroid", ignore_case = TRUE)))
 
@@ -275,3 +292,5 @@ df_virus_oculto <- df_virus %>%  filter(!str_detect(name, regex("virus|viriform|
 dados_fim <- tail(dados, nrow(dados) - 7837434) # - 7837434 inclui Viruses e incertae sedis
 
 # virus actually ends at 7859252 Gammatectivirus GC1 [species]
+
+# -----------
