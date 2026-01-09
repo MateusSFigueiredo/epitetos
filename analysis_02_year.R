@@ -7,6 +7,20 @@
 # Modificado em: 2026-01-08
 # Autor: Mateus Silva Figueiredo
 
+# dif: generaliza, permitindo diferentes períodos e intervalos
+
+# ==============================================================================
+# define parâmetros da análise
+
+ultimo_ano <- 2019 # ultimo ano da análise. decidi 2020
+primeiro_ano <- 1735 # primeiro ano da análise
+per <- 5 # periodo de cada intervalo. 5 para quinquenios
+n_epi <- 30 # top quantos epitetos especificos analisar?
+n_bins <- ((ultimo_ano+1)-primeiro_ano)/per # n_bins = numero de intervalos
+
+# decisão: usar 1735-2019, 5 e talvez 30 para epitetos
+# usar 1 para gráfico de total por ano
+
 # ==============================================================================
 # Load necessary libraries
 # library(dplyr)
@@ -131,8 +145,7 @@ freq_df <- as.data.frame(freq_table) %>%
 # freq_df %>% head(20)
 # View(freq_df)
 
-n_epi <- 30 # top quantos epitetos especificos analisar?
-
+n_epi
 top_specific_epithets <- as.vector(head(freq_df$Var1,n_epi))
 top_specific_epithets
 top_specific_epithets[2]
@@ -152,11 +165,14 @@ df <- df_top
 # colunas = cada epiteto no top
 # linhas = cada ano do começo de cada quinquenio
 
-df_epi_by_year <- as.data.frame(matrix(nrow=58,ncol=30))
+# cria df_epi_by_year com base em quantos intervalos (bins) e quantos epitetos
+df_epi_by_year <- as.data.frame(matrix(nrow=n_bins,ncol=n_epi))
 
+# nome das colunas = top n_epi epitetos
 colnames(df_epi_by_year) <- c(top_specific_epithets)
 
-rownames(df_epi_by_year) <- c(seq(1735,2020,5))
+# nome das linhas = primeiro ano de cada intervalo (bin)
+rownames(df_epi_by_year) <- c(seq(primeiro_ano,ultimo_ano-per+1,per))
 
 
 # ======================================
@@ -165,12 +181,12 @@ rownames(df_epi_by_year) <- c(seq(1735,2020,5))
 # i <- 1  # epitetos
 # j <- 36 # ano inicial do quinquenio
 
-for (i in c(1:30)){
-  for (j in c(1:58)){
+for (i in c(1:n_epi)){
+  for (j in c(1:n_bins)){
     
     # definir ano inicial e final do quinquenio
     ano0 <- as.numeric(rownames(df_epi_by_year)[j])
-    ano4 <- ano0+4
+    ano4 <- ano0+per-1 #para final do periodo
     
     subset(df,df$specific_epithet==top_specific_epithets[i] & df$probable_year %in% c(ano0:ano4),) |> nrow() -> quant
     
@@ -200,19 +216,6 @@ ggplot(df1, aes(x = x, y = value, group=variable, color = variable)) +
   geom_line() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# plot 1 but focus on 1930-1960
-
-ggplot(df1, aes(x = x, y = value, group = variable, color = variable)) +
-  geom_line() +
-  scale_x_continuous(limits = c(1890, 1970)) +
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
-
-plot(df_total$total~rownames(df_total),
-     type='l',
-#     xlim=c(1890,1970),
-#     ylim=c(0,50000),
-main="Novas espécies por ano")
-
 # ==============================================================================
 
 # e se df_epi_by_year for em porcentagem de nomes descritos para aquele quinquenio?
@@ -222,11 +225,11 @@ df_pct_by_year <- df_epi_by_year
 # cria coluna total em df_pct_by_year
 
 # preenche total com soma de todas as espécies daquele quinquenio
-for (j in c(1:58)){
+for (j in c(1:n_bins)){
   
   # definir ano inicial e final do quinquenio
   ano0 <- as.numeric(rownames(df_pct_by_year)[j])
-  ano4 <- ano0+4
+  ano4 <- ano0+per-1
   
   subset(df_clean,df_clean$probable_year %in% c(ano0:ano4),) |> nrow() -> quant
   
@@ -237,8 +240,8 @@ for (j in c(1:58)){
 df_total <- select(df_pct_by_year,total)
 
 # atualiza ao dividir todas as células por total de cada linha
-for (j in 1:58){
-df_pct_by_year[j,] <- df_pct_by_year[j,]/df_pct_by_year[j,31]
+for (j in 1:n_bins){
+df_pct_by_year[j,] <- df_pct_by_year[j,]/df_pct_by_year[j,n_epi+1]
 }
 
 sum(df_pct_by_year[10,])-1
@@ -290,3 +293,21 @@ if(F){
   
   print("Imagem salva")
 }
+
+# ===========================================
+# Gráficos de intervalos menores
+
+# plot lines total
+plot(df_total$total~rownames(df_total),
+     type='l',
+     #     xlim=c(1890,1970),
+     #     ylim=c(0,50000),
+     main="Novas espécies por ano")
+
+# plot 1 but focus on 1930-1960
+
+ggplot(df1, aes(x = x, y = value, group = variable, color = variable)) +
+  geom_line() +
+  scale_x_continuous(limits = c(1890, 1970)) +
+  ggtitle("Guerras?") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
