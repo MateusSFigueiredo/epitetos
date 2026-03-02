@@ -11,7 +11,7 @@
 
 # ==============================================================================
 # Load necessary libraries
-# library(dplyr)
+library(dplyr)
 # library(tidyr)
 # library(stringr)
 
@@ -25,7 +25,7 @@ list.files(pattern = "df_gbif")[length(list.files(pattern = "df_gbif"))]
 
 # Import data
 dados_gbif <- read.csv2(list.files(pattern = "df_gbif")[length(list.files(pattern = "df_gbif"))],
-                       sep=",")
+                        sep=",")
 
 # criar df
 df <- dados_gbif
@@ -103,8 +103,13 @@ rm(epithet_percentages,epithet_counts)
 epithet_pct <- epithet_percentages_complete %>%
   mutate(specific_epithet = factor(specific_epithet, 
                                    levels = rev(levels(specific_epithet))))
-
 # kingdom order based on pct of kingdom shows up
+kingdom_order <- epithet_pct %>%
+  group_by(kingdom) %>%
+  summarize(total = sum(percentage)) %>%
+  arrange(desc(total)) %>%
+  pull(kingdom)
+
 epithet_pct$kingdom <- factor(epithet_pct$kingdom, levels = kingdom_order)
 
 # make graph
@@ -145,44 +150,44 @@ print(main_plot)
 # Pega tempo atual para nome do arquivo
 
 { # começa salvar
-tempo_atual <- format(Sys.time(), "%Y-%m-%d-%H-%M-%S")
-filename<-paste0("graph_01_epi_pct_kingdom_",tempo_atual,".pdf")
-
-# Function to export plot with text preserved
-export_pdf_with_text <- function(plot_obj, filename, width = 2, height = 9) {
-  # Create PDF device with Cairo for better text handling
-  if (capabilities("cairo")) {
-    cairo_pdf(
-      filename = filename,
-      width = width,
-      height = height,
-      family = "Helvetica",  # Use standard, widely available font
-      pointsize = 11
-    )
-  } else {
-    print("no cairo")
+  tempo_atual <- format(Sys.time(), "%Y-%m-%d-%H-%M-%S")
+  filename<-paste0("graph_01_epi_pct_kingdom_",tempo_atual,".pdf")
+  
+  # Function to export plot with text preserved
+  export_pdf_with_text <- function(plot_obj, filename, width = 2, height = 9) {
+    # Create PDF device with Cairo for better text handling
+    if (capabilities("cairo")) {
+      cairo_pdf(
+        filename = filename,
+        width = width,
+        height = height,
+        family = "Helvetica",  # Use standard, widely available font
+        pointsize = 11
+      )
+    } else {
+      print("no cairo")
+    }
+    
+    # Print the plot
+    print(plot_obj)
+    
+    # Close the device
+    dev.off()
+    
+    cat("PDF exported successfully to:", filename, "\n")
+    cat("File size:", file.info(filename)$size / 1024, "KB\n")
   }
   
-  # Print the plot
-  print(plot_obj)
+  # Determine optimal height based on number of epithets
+  num_epithets <- length(unique(df$specific_epithet))
+  plot_height <- max(7, min(20, num_epithets * 0.3))  # Dynamic height adjustment
   
-  # Close the device
-  dev.off()
+  # Export Option 1: All epithets (adjust width/height as needed)
+  export_pdf_with_text(
+    plot_obj = main_plot,
+    filename = filename,
+    width = 12,   # Increased from 10
+    height = plot_height)
   
-  cat("PDF exported successfully to:", filename, "\n")
-  cat("File size:", file.info(filename)$size / 1024, "KB\n")
-}
-
-# Determine optimal height based on number of epithets
-num_epithets <- length(unique(df$specific_epithet))
-plot_height <- max(7, min(20, num_epithets * 0.3))  # Dynamic height adjustment
-
-# Export Option 1: All epithets (adjust width/height as needed)
-export_pdf_with_text(
-  plot_obj = main_plot,
-  filename = filename,
-  width = 12,   # Increased from 10
-  height = plot_height)
-
 } # encerra salvar
 # ===

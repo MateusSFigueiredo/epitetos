@@ -11,12 +11,9 @@
 # df <- df %>% select(id, taxon_name, generic_initial,
 # specific_epithet, kingdom)
 
-# Modificado em: 2025-01-06
+# Modificado em: 2026-02-27
 # Autor: Mateus Silva Figueiredo
-# dif: remove linhas com epíteto 'spec', certamente um artefato do GBIF
-# dif: remove linhas com NA
-
-# a fazer: conferir se é possível identificar ano de descrição da espécie
+# dif: documentation
 
 # ==============================================================================
 # Setup
@@ -25,14 +22,15 @@ library(stringr)
 library(dplyr)
 library(readr) # para read_tsv
 
+setwd("C:/Users/Mateus/Desktop/R/epitetos")
 getwd()
 list.files()
 
-# Download backbone.zip from GBIF Hosted Datasets, which includes Taxon.tsc
+# Download backbone.zip from GBIF Hosted Datasets, which includes Taxon.tsv
 # Current file from 2023-08-28 15:19
 
 # ==============================================================================
-# carregar dados a partir de Taxon.tsc
+# carregar dados a partir de Taxon.tsv
 dados <- read_tsv("Taxon.tsv") # lines # 1.2 minutes
 
 # Conferir dados
@@ -52,22 +50,26 @@ df_accepted <- subset(dados,dados$taxonomicStatus=="accepted")
 # Subset apenas espécies
 df_species <- subset(df_accepted,df_accepted$taxonRank=="species")
 
-# Subset remove virus
-df <- subset(df_species,df_species$kingdom!="Viruses")
-
-# A fazer: conferir se há virus|viroid|viriform|satellite|phage nas espécies
-
 # Subset remove NA
-df <- df[!is.na(df$specificEpithet), ]
+df_no_na <- df_species[!is.na(df_species$specificEpithet), ]
+
+# Subset remove virus
+df <- subset(df_no_na,df_no_na$kingdom!="Viruses")
+
+# Remove rows where 'virus|viroid|viriform' is present in 'canonicalName' and save it to df_alive
+df_alive <- df %>% filter(!str_detect(canonicalName, regex("virus|viroid|viriform", ignore_case = TRUE)))
+
+# save to df
+df <- df_alive
 
 # Remove desnecessários
-rm(df_accepted,df_species)
+rm(df_accepted,df_species,df_no_na)
 
 # Análise de texto
 nrow(df) |> paste("linhas de espécie aceita sem vírus sem NA")
 # ------------------------
 # Define colunas de interesse
-colunas <- c("taxonID","canonicalName","genericName","specificEpithet","kingdom")
+colunas <- c("taxonID","canonicalName","genericName","specificEpithet","kingdom","namePublishedIn")
 # subset apenas colunas de interesse
 df <- df[,colunas]
 
@@ -84,9 +86,10 @@ df<-rename(df, generic_initial = genericInitial)
 df<-rename(df, specific_epithet = specificEpithet)
 df<-rename(df, id = taxonID)
 df<-rename(df, taxon_name = canonicalName)
+df<-rename(df, name_published_in = namePublishedIn) # para análises de ano
 
 # reorder columns
-df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom, name_published_in)
 
 # =======================================
 # remover epitetos spec
@@ -107,7 +110,10 @@ nrow(df_clean) |> paste("espécies em df_clean após remover spec")
 nrow(df) |> paste("linhas de espécies em GBIF no final, após remover spec")
 
 df <- df_clean
-# --------------------------------------
+
+paste("As colunas são",list(colnames(df)))
+
+# =============================================
 
 # df gbif está pronto para ser exportado
 # =======================================
@@ -145,6 +151,27 @@ dados_accepted <- subset(dados,dados$taxonomicStatus=="accepted")
 
 dados_species <- subset(dados_accepted,dados_accepted$taxonRank=="species") 
 # 2191845 espécies aceitas
+
+dados_species$kingdom |> table()
+subset(dados_species,dados_species$kingdom!="Viruses") |> nrow()
+# 2181172 espécies não virus
+
+dados_species$kingdom |> table()
+df$kingdom |> table()
+
+colnames(df)
+
+archaea <- subset(dados_species,dados_species$kingdom=="Archaea")
+
+
+subset(dados,dados$canonicalName == "Zea mays",) |> View()
+subset(dados,dados$canonicalName %in% c("Zea mays",
+                                        "Homo sapiens",
+                                        "Musa paradisiaca",
+                                        "Penelope obscura",
+                                        "Caenorhabditis elegans"),) |> View()
+
+subset(dados,dados$taxonID %in% c("7443716"),) |> View()
 
 # ===================================
 
