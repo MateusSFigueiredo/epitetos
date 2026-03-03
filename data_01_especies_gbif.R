@@ -11,9 +11,9 @@
 # df <- df %>% select(id, taxon_name, generic_initial,
 # specific_epithet, kingdom)
 
-# Modificado em: 2026-02-27
+# Modificado em: 2026-03-02
 # Autor: Mateus Silva Figueiredo
-# dif: documentation
+# dif: remove virus viroid, analisa ao final
 
 # ==============================================================================
 # Setup
@@ -170,6 +170,10 @@ subset(dados,dados$canonicalName %in% c("Zea mays",
                                         "Musa paradisiaca",
                                         "Penelope obscura",
                                         "Caenorhabditis elegans"),) |> View()
+
+subset(dados,dados$genericName == "Homo",) |> View()
+subset(dados,dados$genericName %in% c("Homo","Hylobates")) |> View()
+
 
 subset(dados,dados$taxonID %in% c("7443716"),) |> View()
 
