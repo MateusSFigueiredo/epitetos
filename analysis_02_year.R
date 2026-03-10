@@ -4,10 +4,12 @@
 # Input: df_year_ produzido por data_04_gbif_year
 # Output: a fazer
 #
-# Modificado em: 2026-01-08
+# Modificado em: 2026-03-03
 # Autor: Mateus Silva Figueiredo
 
-# dif: generaliza, permitindo diferentes períodos e intervalos
+# dif: 
+# fixed line 211. subset a partir de df_top em ambas as condições.
+# muda ordem de subset em 142-156 para manter df_accepted útil
 
 # ==============================================================================
 # define parâmetros da análise
@@ -17,6 +19,13 @@ primeiro_ano <- 1735 # primeiro ano da análise
 per <- 5 # periodo de cada intervalo. 5 para quinquenios
 n_epi <- 30 # top quantos epitetos especificos analisar?
 n_bins <- ((ultimo_ano+1)-primeiro_ano)/per # n_bins = numero de intervalos
+
+# confere parâmetros
+paste0("ultimo ano = ",ultimo_ano,
+      ". primeiro ano = ",primeiro_ano,
+      ". per = ",per,
+      ". n epitetos = ",n_epi,
+      ". n bins = ",n_bins)
 
 # decisão: usar 1735-2019, 5 e talvez 30 para epitetos
 # usar 1 para gráfico de total por ano
@@ -125,17 +134,32 @@ dados_year <- read.csv2(list.files(pattern = "df_year")[length(list.files(patter
 
 # criar df
 df <- dados_year
+# df <- dados_year[1:1000,] # menor para testes
 
 # conferir colunas
 colnames(df)
 
-df_clean <- df[!is.na(df$probable_year),]
-df <- df_clean
+# remove epiteto spec
+df <- subset(df,df$specific_epithet!="spec")
+paste(nrow(df),"linhas sem epiteto spec")
+
+# filtrar taxonomic status apenas accepted
+paste(sum(df$taxonomic_status=="accepted"),"linhas com taxonomic status accepted")
+df_accepted <- subset(df,df$taxonomic_status=="accepted")
+df <- df_accepted
+
+# pegar apenas probable_year preenchido
+paste(sum(is.na(df$probable_year)),"linhas com NA em probable_year")
+paste(sum(!is.na(df$probable_year)),"linhas com probable_year preenchido")
+
+df_prob <- df[!is.na(df$probable_year),]
+df <- df_prob
 
 # ==============================================================================
 
 # Step 1: Create a frequency table for the 'specific_epithet' column and order it by frequency
-freq_table <- table(df$specific_epithet)
+# usar df_accepted para usar mais espécies aceitas, mesmo que ano desconhecido
+freq_table <- table(df_accepted$specific_epithet)
 
 # Convert the table to a data frame and order by frequency (in descending order)
 freq_df <- as.data.frame(freq_table) %>%
@@ -148,17 +172,15 @@ freq_df <- as.data.frame(freq_table) %>%
 n_epi
 top_specific_epithets <- as.vector(head(freq_df$Var1,n_epi))
 top_specific_epithets
-top_specific_epithets[2]
+top_specific_epithets[2] # pegar epiteto arbitrario
 
-# talvez seja melhor obter top_specific_epithets a partir de dados mais amplos,
-# não apenas deste subset com publicação
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 # subset df apenas epitetos no top
 
 df_top <- df[df$specific_epithet %in% top_specific_epithets,]
 
-df <- df_top
+# df <- df_top
 
 # ======================================
 # cria df_epi_by_year
@@ -188,7 +210,7 @@ for (i in c(1:n_epi)){
     ano0 <- as.numeric(rownames(df_epi_by_year)[j])
     ano4 <- ano0+per-1 #para final do periodo
     
-    subset(df,df$specific_epithet==top_specific_epithets[i] & df$probable_year %in% c(ano0:ano4),) |> nrow() -> quant
+    subset(df_top,df_top$specific_epithet==top_specific_epithets[i] & df_top$probable_year %in% c(ano0:ano4),) |> nrow() -> quant
     
     df_epi_by_year[j,i] <- as.numeric(quant)
     
@@ -210,11 +232,74 @@ df1$x <- as.numeric(df1$x)
 
 # ----
 
-# make plot 1
+# make plot 1 - somente linhas
 
+if(F){ # mudar para T se quiser fazer o gráfico sem graça
 ggplot(df1, aes(x = x, y = value, group=variable, color = variable)) +
   geom_line() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  }
+
+# -------------------------------------------------
+# plot 1 with symbols on peaks and valleys
+
+# Define custom year lists for each line
+custom_points <- list(
+  "gracilis" = c(1765,1850,1860,1910,1930,1960,2015),  # Multiple years for gracilis # 1910 peak
+  "elegans" = c(1830,1885,2015),
+  "minor" = 2015,
+  "simplex" = c(2015),
+  "similis" = c(1965,2015),
+  "australis" = c(1810,2015),
+  "orientalis" = c(1750,2015),
+  "bicolor" = c(1800,2015),
+  "minuta" = c(2015),
+  "affinis" = c(2015),
+  "elongata" = 2015,
+  "grandis" = 2015,
+  "intermedia" = 2015,
+  "robusta" = 2015,
+  "indica" = c(1750,2015),
+  "occidentalis" = 2015,
+  "tenuis" = 2015,
+  "major" = 2015,
+  "japonica" = c(1780,2015),
+  "insularis" = 2015,
+  "brasiliensis" = c(1890,2015),
+  "minutus" = 2015,
+  "mirabilis" = 2015,
+  "sinensis" = c(1915,2015),
+  "variabilis" = 2015,
+  "montana" = 2015,
+  "minima" = 2015,
+  "elongatus" = 2015,
+  "parva" = 2015,
+  "insignis" = 2015
+)
+
+# Create points dataset - FIXED VERSION
+df1_points <- df1 %>%
+  group_by(variable) %>%
+  filter(x %in% custom_points[[unique(variable)]]) %>%  # Remove [1] to use current group
+  ungroup()
+
+# Fazer gráfico
+ggplot(df1, aes(x = x, y = value, group = variable, color = variable)) +
+  geom_line() +
+  geom_point(data = df1_points,
+             aes(x = x, y = value, group = variable, color = variable, shape = variable),
+             size = 2) +
+  scale_shape_manual(values = rep(c(16, 17, 15, 23), 
+                                  length.out = length(unique(df1$variable)))) +
+  
+  # linhas verticais opcionais
+  #  geom_vline(xintercept = seq(from = 1870, to = 1930, by = 5),linetype = "solid", color = "gray70",alpha = 0.7) +
+  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# esse aqui em cima tá muito legal
+
+print("gráfico feito")
 
 # ==============================================================================
 
@@ -234,7 +319,7 @@ for (j in c(1:n_bins)){
   subset(df_clean,df_clean$probable_year %in% c(ano0:ano4),) |> nrow() -> quant
   
   df_pct_by_year[j,'total'] <- as.numeric(quant)
-}
+} # takes a bit of time
 
 # cria df_total apenas com ano e total de espécies do quinquenio
 df_total <- select(df_pct_by_year,total)
@@ -279,7 +364,7 @@ find_value_positions(df_pct_by_year,highest)
 
 # ----------
 # ======================================
-# print("Gráfico pronto")
+print("Gráfico pronto")
 # ==============================================================================
 # Exportar gráfico pronto
 
@@ -311,3 +396,14 @@ ggplot(df1, aes(x = x, y = value, group = variable, color = variable)) +
   scale_x_continuous(limits = c(1890, 1970)) +
   ggtitle("Guerras?") +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+
+# ===========
+# rascunho
+sum(is.na(dados_year$probable_year))
+paste(sum(is.na(dados_year$probable_year)),"linhas com probable_year NA em dados_year")
+
+# top 30 espécies em df_accepted
+table(df_accepted$specific_epithet) %>% as.data.frame() %>% arrange(desc(Freq)) %>% head(30)
+
+# top 30 espécies em df_prob
+table(df_prob$specific_epithet) %>% as.data.frame() %>% arrange(desc(Freq)) %>% head(30)
