@@ -5,16 +5,18 @@
 # Input: arquivo dataset-313531.txtree
 
 # Output: arquivo com colunas ("id","taxon_name",
-# "generic_initial", "specific_epithet", "kingdom")
-# Colunas no output: df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
+# "generic_initial", "specific_epithet", "kingdom",
+# "equal","question") para linhas com = e ?
 
-# Modificado em: 2026-01-06
+
+# Modificado em: 2026-03-20
 # Autor: Mateus Silva Figueiredo
-# dif: padroniza colunas em ordem
+# dif: cria colunas rank, equal, question. Mantém linhas com = e ?.
 
 # ==============================================================================
 # Setup
 
+setwd("C:/Users/Mateus/Desktop/R/epitetos")
 getwd()
 list.files()
 
@@ -110,9 +112,32 @@ df_alive <- df[-c(virus_start:virus_end),]
 # Remove rows with 'virus|viroid|viriform' from the original df which might not me in the Viruses [unranked] interval
 df_alive <- df_alive %>% filter(!str_detect(name, regex("virus|viroid|viriform", ignore_case = TRUE)))
 
-# -------------
 
-# atualiza df, agora sem virus
+# ==============================================================================
+# create column rank based on what is between []
+df_alive$rank <- gsub(".*\\[(.*)\\].*", "\\1", df_alive$name)
+# optional really. might be useful for future projects
+
+# check
+table(df_alive$rank)
+
+# Create the equal column and add "equal" for lines with = in the 3 first chars
+df_alive$equal <- ifelse(
+  grepl("\\=", substr(df_alive$name, 1, 3)),
+  "equal",
+  NA  # or use "" for empty string, or leave as is
+)
+
+
+# Create the question column and add "question" for lines with ? in the first 3 chars
+df_alive$question <- ifelse(
+  grepl("\\?", substr(df_alive$name, 1, 3)),
+  "question",
+  NA  # or use "" for empty string, or leave as is
+)
+
+# ---------------------
+# atualiza df
 df <- df_alive
 # ==============================================================================
 
@@ -172,11 +197,12 @@ if(T){
 } # taxon_name should have only two words
 
 # check again
-if(F){ # F to ignore, T to run
-df[492,] # normal species
-df[1522515,] # has =
-df[4478746,] # has = and - =Orobanche cirsii-oleracei Casp. [species]]
-df[2605582,] # has ? ?Camptonotus amplus Marsh, 1879 [species]
+if(T){ # F to ignore, T to run
+#[492,] # normal species
+#[1522515,] # has =
+#[4478746,] # has = and - =Orobanche cirsii-oleracei Casp. [species]]
+#[2605582,] # has ? ?Camptonotus amplus Marsh, 1879 [species]
+df[(c(492,1522515,4478746,2605582)),]
 }
 
 # remover split_names, já usado
@@ -193,35 +219,41 @@ df$taxon_name<-gsub("†","",df$taxon_name)
 n_all <- nrow(df) # numero de todas as especies em dados
 
 # Keep only rows where the first character of 'name' is NOT '='
-df <- df %>% filter(substr(taxon_name, 1, 1) != "=")
+df_no_syn <- df %>% filter(substr(taxon_name, 1, 1) != "=")
 # Remove linhas de sinônimos
 
-n_no_syn <- nrow(df) # numero de especies removendo os sinonimos
+n_no_syn <- nrow(df_no_syn) # numero de especies removendo os sinonimos
 
 # Análise em texto.
 paste("Havia",n_all,"linhas com [species].",
       "Após remoção dos sinônimos com = sobraram",n_no_syn,
-      "Foram removidos",n_all-n_no_syn,"sinônimos.")
+      "Foram removidos",n_all-n_no_syn,"sinônimos para gerar df_no_syn.")
 
 # --------------
 # Para lista sem espécies dúbias
 # # Keep only rows where the first character of 'name' is NOT '?'
-if(T){df <- df %>% filter(substr(taxon_name, 1, 1) != "?")}
+if(T){df_no_dub <- df_no_syn %>% filter(substr(taxon_name, 1, 1) != "?")}
 # Remove espécies dubias
 
-n_no_dub <- nrow(df) # numero de especies removendo sinonimos e dubias
+n_no_dub <- nrow(df_no_dub) # numero de especies removendo sinonimos e dubias
 
 # Análise em texto
 paste("Havia",n_all,"linha de espécie.",
       "Após remover sinônimos (=), sobraram",n_no_syn,"espécies.",
       "Após remover dúbias (?), sobraram",n_no_dub,"espécies.")
 
-# sobra nenhuma espécie com ×, nenhuma com =, nenhuma começando com ?
+
+df_clean <- df_no_dub
+# em df_clean sobra nenhuma espécie com ×, nenhuma com =, nenhuma começando com ?
+
+# em df, há espécies com = e com ?, mas são fáceis de tirar pelas colunas synonym e dubious
 
 # ==============================================================================
 # Criar coluna generic_initial
+library(stringr)
 df <- df %>%
-  mutate(generic_initial = substr(taxon_name, 1, 1))
+  mutate(generic_initial = str_extract(taxon_name, "[A-Z]"))
+# get first capital letter, even if there are = or ? before
 
 # check
 table(df$generic_initial)
@@ -240,7 +272,8 @@ colnames(df)
 # rename column by column # no need
 
 # reorder columns
-df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom)
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom,
+                   equal,question)
 
 # =======================================
 # Export df
@@ -294,3 +327,10 @@ dados_fim <- tail(dados, nrow(dados) - 7837434) # - 7837434 inclui Viruses e inc
 # virus actually ends at 7859252 Gammatectivirus GC1 [species]
 
 # -----------
+
+df$status %>% table() %>% sort()
+
+df_syn <- subset(df,df$status=="synonym")
+df_homo <- subset(df,df$status=="homotypic synonym")
+df_hetero <- subset(df,df$status=="heterotypic synonym")
+df_doubt <- subset(df,df$status=="doubtful")

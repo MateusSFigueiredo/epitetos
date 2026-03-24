@@ -9,11 +9,11 @@
 
 # Colunas no output:
 # df <- df %>% select(id, taxon_name, generic_initial,
-# specific_epithet, kingdom)
+# specific_epithet, kingdom, status)
 
-# Modificado em: 2026-03-02
+# Modificado em: 2026-03-21
 # Autor: Mateus Silva Figueiredo
-# dif: remove virus viroid, analisa ao final
+# dif: mantem espécies não aceitas. Cria coluna status.
 
 # ==============================================================================
 # Setup
@@ -45,10 +45,10 @@ if(F){ # T para executar, F para ignorar
 
 # =========================================================
 # Subset apenas aceitos
-df_accepted <- subset(dados,dados$taxonomicStatus=="accepted")
+# df_accepted <- subset(dados,dados$taxonomicStatus=="accepted")
 
 # Subset apenas espécies
-df_species <- subset(df_accepted,df_accepted$taxonRank=="species")
+df_species <- subset(dados,dados$taxonRank=="species")
 
 # Subset remove NA
 df_no_na <- df_species[!is.na(df_species$specificEpithet), ]
@@ -66,10 +66,10 @@ df <- df_alive
 rm(df_accepted,df_species,df_no_na)
 
 # Análise de texto
-nrow(df) |> paste("linhas de espécie aceita sem vírus sem NA")
+nrow(df) |> paste("linhas de espécies sem vírus sem NA, aceita ou não")
 # ------------------------
 # Define colunas de interesse
-colunas <- c("taxonID","canonicalName","genericName","specificEpithet","kingdom","namePublishedIn")
+colunas <- c("taxonID","canonicalName","genericName","specificEpithet","kingdom","namePublishedIn","taxonomicStatus")
 # subset apenas colunas de interesse
 df <- df[,colunas]
 
@@ -87,15 +87,16 @@ df<-rename(df, specific_epithet = specificEpithet)
 df<-rename(df, id = taxonID)
 df<-rename(df, taxon_name = canonicalName)
 df<-rename(df, name_published_in = namePublishedIn) # para análises de ano
+df<-rename(df, status = taxonomicStatus) # para comparações entre datasets
 
 # reorder columns
-df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom, name_published_in)
+df <- df %>% select(id, taxon_name, generic_initial, specific_epithet, kingdom, name_published_in, status)
 
 # =======================================
 # remover epitetos spec
 nrow(df) |> paste("espécies em df antes da remoção")
 
-rm(df_spec,df_clean)
+# rm(df_spec,df_clean)
 
 df_spec <- subset(df,df$specific_epithet=="spec")
 
